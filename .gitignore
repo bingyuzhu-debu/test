@@ -12,7 +12,7 @@ env/
 venv/
 build/
 dist/
-*.spec
+
 
 # Logs
 *.log

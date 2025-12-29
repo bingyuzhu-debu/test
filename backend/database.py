@@ -7,8 +7,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base
 
+import sys
+import os
+
 # SQLite数据库文件路径
-DATABASE_URL = "sqlite:///./bank_statement.db"
+if getattr(sys, 'frozen', False):
+    # 如果是打包后的 executable，数据库存放在 exe 同级目录
+    BASE_DIR = os.path.dirname(sys.executable)
+    DB_PATH = os.path.join(BASE_DIR, "bank_statement.db")
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
+else:
+    DATABASE_URL = "sqlite:///./bank_statement.db"
 
 # 创建数据库引擎
 engine = create_engine(
