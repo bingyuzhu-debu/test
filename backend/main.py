@@ -3,6 +3,8 @@ FastAPI 主应用
 提供银行对账单生成的Web API
 """
 
+import sys
+import webbrowser
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -34,13 +36,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 获取当前文件所在目录（打包版本使用相对路径）
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 确定应用的基础路径和资源路径
+if getattr(sys, 'frozen', False):
+    # 如果是打包后的 executable
+    # sys.executable 指向 exe 文件，dirname 得到 exe 所在目录（用于存储数据）
+    BASE_DIR = os.path.dirname(sys.executable)
+    # sys._MEIPASS 指向解压后的临时目录（用于读取打包的资源）
+    RESOURCE_DIR = sys._MEIPASS
+    # 前端文件在打包资源的 frontend 目录下
+    FRONTEND_DIR = os.path.join(RESOURCE_DIR, "frontend")
+else:
+    # 正常 Python 运行环境
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
-# 文件存储目录（使用相对路径）
+# 文件存储目录（在 exe 旁边的目录，保证数据持久化）
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
-FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
 # 确保目录存在
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -51,9 +63,15 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 def startup_event():
     """应用启动时初始化数据库"""
     init_db()
-    print("✓ FastAPI应用启动成功")
-    print(f"✓ 前端静态文件目录: {FRONTEND_DIR}")
-    print(f"✓ 访问地址: http://localhost:8000")
+    print("FastAPI app started successfully")
+    print(f"Frontend static files dir: {FRONTEND_DIR}")
+    print(f"Access URL: http://localhost:8000")
+    # 自动打开浏览器
+    try:
+        webbrowser.open("http://localhost:8000")
+        print("Browser opened automatically")
+    except Exception as e:
+        print(f"Failed to open browser: {e}")
 
 
 # 挂载静态文件（前端资源）
@@ -70,20 +88,7 @@ if os.path.exists(FRONTEND_DIR):
             return FileResponse(index_path)
         return {"status": "ok", "message": "前端文件未找到"}
 
-    # 捕获所有其他路由，返回 index.html（用于前端路由）
-    @app.get("/{full_path:path}")
-    def catch_all(full_path: str):
-        """捕获所有前端路由"""
-        # 如果是 API 请求，不处理
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="API 路由不存在")
 
-        # 返回前端 index.html
-        index_path = os.path.join(FRONTEND_DIR, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-
-        raise HTTPException(status_code=404, detail="页面不存在")
 else:
     @app.get("/")
     def root():
@@ -213,7 +218,13 @@ async def generate_statement(
                 "task": task.to_dict()
             }
 
+        except HTTPException:
+            raise
         except Exception as e:
+            # 记录详细错误日志
+            import logging
+            logging.getLogger("main").error(f"Generate statement failed: {str(e)}", exc_info=True)
+            
             # 更新任务状态为失败
             task.status = 'failed'
             task.error_message = str(e)
@@ -467,6 +478,23 @@ def get_statistics(db: Session = Depends(get_db)):
         )
 
 
+# 捕获所有其他路由，放置在最后防止覆盖API路由
+@app.get("/{full_path:path}")
+def catch_all(full_path: str):
+    """捕获所有前端路由"""
+    # 如果是 API 请求，不处理 (理论上这行不会被执行，除非API真的不存在)
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API 路由不存在")
+
+    # 返回前端 index.html
+    if os.path.exists(FRONTEND_DIR):
+        index_path = os.path.join(FRONTEND_DIR, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+
+    raise HTTPException(status_code=404, detail="页面不存在")
+
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -479,9 +507,24 @@ if __name__ == "__main__":
     print("="*50 + "\n")
 
     # 生产环境运行（不启用热重载）
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=False
-    )
+    # 修复无终端模式下 uvicorn 日志报错的问题
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
+    try:
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=8000,
+            reload=False,
+            log_config=None, # Disable uvicorn's default logging config
+        )
+    except Exception as e:
+        # 尝试弹窗报错 (仅 Windows)
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, f"程序启动失败: {str(e)}", "错误", 0x10)
+        except:
+            pass

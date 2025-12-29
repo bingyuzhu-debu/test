@@ -21,9 +21,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    """初始化数据库（创建所有表）"""
+    print("Starting database initialization...")
     Base.metadata.create_all(bind=engine)
-    print("✓ 数据库初始化完成")
+    print("Database initialization completed")
 
 
 def get_db():

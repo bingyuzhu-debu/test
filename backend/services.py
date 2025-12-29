@@ -12,22 +12,26 @@ from datetime import datetime
 import calendar
 
 # 添加现有脚本的路径
-sys.path.append('/Users/mi/Desktop/财务')
+# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+import generate_statement_leishi_tiandi
+import generate_statement_leihai
+import generate_statement_chengdu_leishi
 
 # 公司配置映射
 COMPANY_CONFIG = {
     '雷石天地': {
-        'script_class': 'BankStatementGenerator',
+        'script_class': generate_statement_leishi_tiandi.BankStatementGenerator,
         'script_file': 'generate_statement_leishi_tiandi.py',
         'bank_count': 12
     },
     '镭海': {
-        'script_class': 'LeihaiStatementGenerator',
+        'script_class': generate_statement_leihai.LeihaiStatementGenerator,
         'script_file': 'generate_statement_leihai.py',
         'bank_count': 2
     },
     '成都雷石': {
-        'script_class': 'ChengduLeishiStatementGenerator',
+        'script_class': generate_statement_chengdu_leishi.ChengduLeishiStatementGenerator,
         'script_file': 'generate_statement_chengdu_leishi.py',
         'bank_count': 2
     }
@@ -77,8 +81,8 @@ class BankStatementService:
             }
         """
         try:
-            # 动态导入对应的生成器类
-            generator_class = self._get_generator_class()
+            # 获取对应的生成器类
+            generator_class = self.config['script_class']
 
             # 创建生成器实例
             generator = generator_class(self.uploaded_file_path)
@@ -125,23 +129,14 @@ class BankStatementService:
             }
 
         except Exception as e:
+            import logging
+            logging.getLogger("main").error(f"Service generation error: {str(e)}", exc_info=True)
             return {
                 'status': 'failed',
                 'message': f'处理出错: {str(e)}'
             }
 
-    def _get_generator_class(self):
-        """动态导入生成器类"""
-        script_file = self.config['script_file']
-        class_name = self.config['script_class']
 
-        # 动态导入模块
-        module_name = script_file.replace('.py', '')
-        module = __import__(module_name)
-
-        # 获取类
-        generator_class = getattr(module, class_name)
-        return generator_class
 
     def _collect_statistics(self, generator) -> dict:
         """
