@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use calamine::{Reader, open_workbook_auto, Data, DataType};
-use rust_xlsxwriter::Workbook;
+use rust_xlsxwriter::{Workbook, Format};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProcessResult {
@@ -220,20 +220,22 @@ pub fn process_excel<P: AsRef<Path>>(input_path: P, output_path: P, config: Gene
     worksheet.write_string(0, 4, "账号（银行科目号）").map_err(|e| e.to_string())?;
     worksheet.write_string(0, 5, "备注").map_err(|e| e.to_string())?;
 
+    let currency_format = Format::new().set_num_format("#,##0.00");
+
     for (i, record) in all_records.iter().enumerate() {
         let row = (i + 1) as u32;
         worksheet.write_string(row, 0, &record.date).map_err(|e| e.to_string())?;
         worksheet.write_string(row, 1, &record.settlement_no).map_err(|e| e.to_string())?;
         
         if record.debit != 0.0 {
-            worksheet.write_number(row, 2, record.debit).map_err(|e| e.to_string())?;
+            worksheet.write_number_with_format(row, 2, record.debit, &currency_format).map_err(|e| e.to_string())?;
         }
         if record.credit != 0.0 {
-            worksheet.write_number(row, 3, record.credit).map_err(|e| e.to_string())?;
+            worksheet.write_number_with_format(row, 3, record.credit, &currency_format).map_err(|e| e.to_string())?;
         }
         
         worksheet.write_string(row, 4, &record.account_code).map_err(|e| e.to_string())?;
-        worksheet.write_string(row, 5, &record.remark).map_err(|e| e.to_string())?;
+        worksheet.write_string(row, 5, "").map_err(|e| e.to_string())?;
     }
 
     out_wb.save(output_path.as_ref()).map_err(|e| e.to_string())?;
