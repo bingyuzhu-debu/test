@@ -24,6 +24,7 @@ jobs:
 
       - name: install dependencies
         run: npm install
+        working-directory: ./bank-statement-system-rs
 
       - name: Build app
         uses: tauri-apps/tauri-action@v0
